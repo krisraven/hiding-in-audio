@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio Steganography — Hide messages in music</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0f0f;
+    --bg2: #161818;
+    --bg3: #1e2020;
+    --border: rgba(255,255,255,0.08);
+    --border-hover: rgba(255,255,255,0.16);
+    --text: #e8e6e0;
+    --text-muted: #7a7870;
+    --text-dim: #4a4845;
+    --accent: #c8f0a0;
+    --accent-dim: rgba(200,240,160,0.12);
+    --accent-border: rgba(200,240,160,0.3);
+    --danger: #f09595;
+    --danger-dim: rgba(240,149,149,0.1);
+    --mono: 'DM Mono', monospace;
+    --serif: 'Instrument Serif', serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ── Layout ── */
+  .shell {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+  }
+
+  header {
+    margin-bottom: 3.5rem;
+    border-bottom: 0.5px solid var(--border);
+    padding-bottom: 2rem;
+  }
+
+  header h1 {
+    font-family: var(--serif);
+    font-size: 2.6rem;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--text);
+    line-height: 1.1;
+    margin-bottom: 0.5rem;
+  }
+
+  header p {
+    color: var(--text-muted);
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+
+  header p span {
+    color: var(--accent);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5px;
+    background: var(--border);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+  }
+
+  .panel {
+    background: var(--bg2);
+    padding: 2rem;
+  }
+
+  .panel-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 0.5px;
+    background: var(--border);
+  }
+
+  /* ── Form elements ── */
+  label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--bg3);
+    border: 0.5px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 12px;
+    resize: vertical;
+    transition: border-color 0.15s;
+    outline: none;
+  }
+
+  textarea:focus, input[type="text"]:focus {
+    border-color: var(--border-hover);
+  }
+
+  textarea { min-height: 100px; }
+
+  .field { margin-bottom: 1.25rem; }
+
+  /* ── Melody builder ── */
+  .melody-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+
+  .note-btn {
+    padding: 6px 11px;
+    border: 0.5px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg3);
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.12s;
+    user-select: none;
+  }
+
+  .note-btn:hover { border-color: var(--border-hover); color: var(--text); }
+  .note-btn.active { background: var(--accent-dim); border-color: var(--accent-border); color: var(--accent); }
+
+  .melody-display {
+    font-size: 12px;
+    color: var(--text-dim);
+    min-height: 18px;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+    font-style: italic;
+  }
+
+  .melody-display.has-notes { color: var(--text-muted); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 0.5px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    outline: none;
+  }
+
+  .btn:hover { border-color: var(--border-hover); color: var(--text); }
+  .btn:active { transform: scale(0.98); }
+
+  .btn-primary {
+    background: var(--accent-dim);
+    border-color: var(--accent-border);
+    color: var(--accent);
+  }
+
+  .btn-primary:hover {
+    background: rgba(200,240,160,0.18);
+    border-color: rgba(200,240,160,0.5);
+    color: var(--accent);
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+  }
+
+  /* ── Status / output ── */
+  .status-box {
+    margin-top: 1.25rem;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: none;
+    line-height: 1.5;
+  }
+
+  .status-box.success {
+    display: block;
+    background: var(--accent-dim);
+    border: 0.5px solid var(--accent-border);
+    color: var(--accent);
+  }
+
+  .status-box.error {
+    display: block;
+    background: var(--danger-dim);
+    border: 0.5px solid rgba(240,149,149,0.25);
+    color: var(--danger);
+  }
+
+  .status-box.info {
+    display: block;
+    background: var(--bg3);
+    border: 0.5px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  .revealed-message {
+    margin-top: 1.25rem;
+    display: none;
+  }
+
+  .revealed-message .msg-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .revealed-message .msg-text {
+    font-family: var(--serif);
+    font-size: 1.35rem;
+    font-style: italic;
+    color: var(--text);
+    line-height: 1.5;
+    padding: 14px 16px;
+    background: var(--bg3);
+    border: 0.5px solid var(--border);
+    border-radius: 6px;
+    word-break: break-word;
+  }
+
+  /* ── Upload zone ── */
+  .upload-zone {
+    border: 0.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--bg3);
+    margin-bottom: 1rem;
+  }
+
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--border-hover); background: var(--bg2); }
+  .upload-zone p { color: var(--text-muted); font-size: 13px; }
+  .upload-zone .icon { font-size: 24px; margin-bottom: 8px; color: var(--text-dim); }
+  .upload-zone input { display: none; }
+
+  /* ── Waveform visualiser ── */
+  .waveform-wrap {
+    margin: 1rem 0;
+    display: none;
+  }
+
+  canvas#waveform {
+    width: 100%;
+    height: 48px;
+    display: block;
+    border-radius: 4px;
+    background: var(--bg3);
+  }
+
+  /* ── How it works section ── */
+  .explainer {
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .explainer-header {
+    padding: 1rem 1.5rem;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+
+  .explainer-header:hover { color: var(--text-muted); }
+
+  .explainer-body {
+    display: none;
+    padding: 0 1.5rem 1.5rem;
+    border-top: 0.5px solid var(--border);
+  }
+
+  .explainer-body.open { display: block; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 12px;
+    padding: 1rem 0;
+    border-bottom: 0.5px solid var(--border);
+  }
+
+  .step:last-child { border-bottom: none; }
+
+  .step-num {
+    font-size: 11px;
+    color: var(--text-dim);
+    padding-top: 2px;
+  }
+
+  .step-content h4 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+    font-family: var(--mono);
+  }
+
+  .step-content p {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .step-content code {
+    background: var(--bg3);
+    border: 0.5px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 11px;
+    color: var(--accent);
+    font-family: var(--mono);
+  }
+
+  /* ── Progress ── */
+  .progress-bar {
+    height: 2px;
+    background: var(--bg3);
+    border-radius: 1px;
+    margin: 8px 0;
+    overflow: hidden;
+    display: none;
+  }
+
+  .progress-bar.active { display: block; }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 1px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: 1fr; }
+    header h1 { font-size: 2rem; }
+    .shell { padding: 2rem 1.25rem 4rem; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <h1>Audio Steganography</h1>
+    <p>Hide secret messages inside music using <span>LSB encoding</span> — invisible to ears, readable by code.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- ── ENCODE PANEL ── -->
+    <div class="panel">
+      <div class="panel-label">Encode — hide a message</div>
+
+      <div class="field">
+        <label>Secret message</label>
+        <textarea id="secret-msg" placeholder="Type the message you want to hide..."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Cover melody</label>
+        <div class="melody-row" id="melody-row"></div>
+        <div class="melody-display" id="melody-display">no notes — a random melody will be used</div>
+      </div>
+
+      <div class="field">
+        <label>Duration (seconds)</label>
+        <input type="range" id="duration" min="2" max="30" value="8" style="width:100%; margin-bottom:4px;">
+        <div style="font-size:12px; color:var(--text-muted);" id="duration-label">8 seconds — fits up to ~4,400 characters</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="encode()">Generate & hide</button>
+        <button class="btn" onclick="undoLastNote()" style="font-size:12px;">Undo last</button>
+        <button class="btn" onclick="clearMelody()" style="font-size:12px;">Clear melody</button>
+      </div>
+
+      <div class="progress-bar" id="enc-progress"><div class="progress-fill" id="enc-fill"></div></div>
+      <div class="status-box" id="enc-status"></div>
+
+      <div id="download-area" style="display:none; margin-top:1rem;">
+        <canvas id="waveform" height="48" style="width:100%; display:block; margin-bottom:10px;"></canvas>
+        <button class="btn btn-primary" id="download-btn" onclick="downloadWav()">Download WAV file</button>
+        <p style="font-size:11px; color:var(--text-dim); margin-top:8px;">Share this file — the message is hidden inside.</p>
+      </div>
+    </div>
+
+    <!-- ── DECODE PANEL ── -->
+    <div class="panel">
+      <div class="panel-label">Decode — reveal a message</div>
+
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('wav-input').click()"
+           ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+        <div class="icon">♪</div>
+        <p>Drop a WAV file here<br>or click to browse</p>
+        <input type="file" id="wav-input" accept=".wav,audio/wav" onchange="fileSelected(event)">
+      </div>
+
+      <div id="file-info" style="display:none; margin-bottom:1rem;">
+        <div style="font-size:12px; color:var(--text-muted); padding:8px 12px; background:var(--bg3); border-radius:5px; border:0.5px solid var(--border);">
+          <span id="file-name"></span>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="decode()" style="width:100%">Decode message</button>
+
+      <div class="progress-bar" id="dec-progress"><div class="progress-fill" id="dec-fill"></div></div>
+      <div class="status-box" id="dec-status"></div>
+
+      <div class="revealed-message" id="revealed">
+        <div class="msg-label">Hidden message</div>
+        <div class="msg-text" id="msg-text"></div>
+        <button class="btn" onclick="copyMsg()" style="margin-top:8px; font-size:12px;">Copy text</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── HOW IT WORKS ── -->
+  <div class="explainer">
+    <div class="explainer-header" onclick="toggleExplainer()">
+      <span>How LSB steganography works</span>
+      <span id="explainer-arrow">↓</span>
+    </div>
+    <div class="explainer-body" id="explainer-body">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-content">
+          <h4>Generate audio samples</h4>
+          <p>A melody is synthesised using the Web Audio API — each note is a sine wave at a specific frequency. The audio is rendered into a flat array of 16-bit PCM integers: one number per sample, 44,100 samples per second.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-content">
+          <h4>Convert message to binary</h4>
+          <p>Each character in the secret message is converted to its ASCII code, then to 8 binary digits. <code>"H" → 72 → 01001000</code>. The full message becomes a long string of 0s and 1s.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-content">
+          <h4>Write length header</h4>
+          <p>The first 32 audio samples store the message length in binary. This tells the decoder exactly how many bits to read — without it, the decoder wouldn't know where the message ends.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-content">
+          <h4>Flip the LSBs</h4>
+          <p>For each bit of the message, take one audio sample and force its last bit to match. If the bit is <code>1</code>: <code>sample | 1</code>. If <code>0</code>: <code>sample & ~1</code>. This changes the sample by at most 1 unit out of 32,767 — completely inaudible.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">05</div>
+        <div class="step-content">
+          <h4>Export as WAV</h4>
+          <p>The modified samples are packed into a WAV file (uncompressed). WAV preserves every sample exactly — unlike MP3, which would destroy the LSB data during lossy compression.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">06</div>
+        <div class="step-content">
+          <h4>Decode</h4>
+          <p>Load the WAV, read the first 32 sample LSBs to get message length, then read that many LSBs from subsequent samples. Group into 8-bit chunks, convert each to ASCII, and reconstruct the original text.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import {
+  buildNoteButtons, addNote, undoLastNote, clearMelody,
+  encode, downloadWav,
+  fileSelected, dragOver, dragLeave, dropFile, decode, copyMsg,
+  toggleExplainer, initDurationSlider
+} from './ui.js';
+
+// Expose functions to global scope so inline onclick attributes work
+window.encode          = encode;
+window.downloadWav     = downloadWav;
+window.fileSelected    = fileSelected;
+window.dragOver        = dragOver;
+window.dragLeave       = dragLeave;
+window.dropFile        = dropFile;
+window.decode          = decode;
+window.copyMsg         = copyMsg;
+window.undoLastNote    = undoLastNote;
+window.clearMelody     = clearMelody;
+window.toggleExplainer = toggleExplainer;
+
+// Initialise on load
+buildNoteButtons();
+initDurationSlider();
+</script>
+</body>
+</html>
