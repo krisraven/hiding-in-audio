@@ -4,6 +4,12 @@ Hide secret messages inside music. The message is encoded into a WAV file using 
 
 No server, no dependencies, no build step. Open `audio-steg.html` in a browser and it works.
 
+> **When running locally:** Some browsers block local file imports due to CORS restrictions. If there's a CORS error, serve the files over HTTP instead:
+> ```bash
+> python3 -m http.server 8080
+> ```
+> Then open `http://localhost:8080/audio-steg.html`.
+
 ---
 
 ## How to use
